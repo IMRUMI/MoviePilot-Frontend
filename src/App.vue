@@ -1,78 +1,54 @@
 <script lang="ts" setup>
-import { useToast } from 'vue-toast-notification'
 import { useTheme } from 'vuetify'
-import api from './api'
-import type { User } from './api/types'
-import store from './store'
-import avatar1 from '@images/avatars/avatar-1.png'
+import { checkPrefersColorSchemeIsDark } from '@/@core/utils'
 
-// 第一时间应用主题
 const { global: globalTheme } = useTheme()
-globalTheme.name.value = localStorage.getItem('theme') || 'light'
 
-// 路由
-const route = useRoute()
+// 生效主题
+async function setTheme() {
+  let themeValue = localStorage.getItem('theme') || 'light'
+  const autoTheme = checkPrefersColorSchemeIsDark() ? 'dark' : 'light'
+  globalTheme.name.value = themeValue === 'auto' ? autoTheme : themeValue
+}
 
-// 提示框
-const $toast = useToast()
-
-// SSE持续接收消息
-function startSSEMessager() {
-  const token = store.state.auth.token
-  if (token) {
-    const eventSource = new EventSource(
-      `${import.meta.env.VITE_API_BASE_URL}system/message?token=${token}`,
-    )
-
-    eventSource.addEventListener('message', (event) => {
-      const message = event.data
-      if (message)
-        $toast.info(message)
-    })
-
-    onBeforeUnmount(() => {
-      eventSource.close()
-    })
+// ApexCharts 全局配置
+declare global {
+  interface Window {
+    Apex: any
   }
 }
 
-// 当前用户信息
-const accountInfo = ref<User>({
-  id: 0,
-  name: '',
-  password: '',
-  email: '',
-  is_active: false,
-  is_superuser: false,
-  avatar: avatar1,
-})
-
-// 调用API，加载当前用户数据
-async function loadAccountInfo() {
-  try {
-    const user: User = await api.get('user/current')
-
-    accountInfo.value = user
-    if (!accountInfo.value.avatar)
-      accountInfo.value.avatar = avatar1
+if (window.Apex) {
+  // 数据标签
+  window.Apex.dataLabels = {
+    formatter: function (_: number, { seriesIndex, w }: { seriesIndex: number; w: any }) {
+      // 如果有小数点，保留两位小数，否则保留整数
+      const data = w.config.series[seriesIndex]
+      return data.toFixed(data % 1 === 0 ? 0 : 1)
+    },
   }
-  catch (error) {
-    console.log(error)
+  // 图例
+  window.Apex.legend = {
+    labels: {
+      useSeriesColors: true,
+    },
+  }
+  // 标题
+  window.Apex.title = {
+    style: {
+      color: 'rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))',
+    },
   }
 }
 
 // 页面加载时，加载当前用户数据
-onMounted(() => {
-  loadAccountInfo()
-  startSSEMessager()
+onBeforeMount(async () => {
+  setTheme()
 })
-
-// 提供给所有元素复用
-provide('accountInfo', accountInfo)
 </script>
 
 <template>
   <VApp>
-    <RouterView :key="route.fullPath" />
+    <RouterView />
   </VApp>
 </template>

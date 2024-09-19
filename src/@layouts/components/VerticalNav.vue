@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { Component } from 'vue'
-import { PerfectScrollbar } from 'vue3-perfect-scrollbar'
 import { useDisplay } from 'vuetify'
 import logo from '@images/logo.svg?raw'
 
@@ -15,13 +14,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { mdAndDown } = useDisplay()
-
 const refNav = ref()
-
-/*
-  ℹ️ Close overlay side when route is changed
-  Close overlay vertical nav when link is clicked
-*/
 const route = useRoute()
 
 watch(
@@ -31,9 +24,11 @@ watch(
   },
 )
 
+// 是否滚动
 const isVerticalNavScrolled = ref(false)
 const updateIsVerticalNavScrolled = (val: boolean) => (isVerticalNavScrolled.value = val)
 
+// 滚动响应
 function handleNavScroll(evt: Event) {
   isVerticalNavScrolled.value = (evt.target as HTMLElement).scrollTop > 0
 }
@@ -83,8 +78,12 @@ function handleNavScroll(evt: Event) {
 </template>
 
 <style lang="scss">
-@use "@configured-variables" as variables;
-@use "@layouts/styles/mixins";
+@use '@configured-variables' as variables;
+@use '@layouts/styles/mixins';
+
+.visible {
+  visibility: visible !important;
+}
 
 // 👉 Vertical Nav
 .layout-vertical-nav {
@@ -97,7 +96,12 @@ function handleNavScroll(evt: Event) {
   inset-block-start: 0;
   inset-inline-start: 0;
   transition: transform 0.25s ease-in-out, inline-size 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
+  visibility: hidden;
   will-change: transform, inline-size;
+
+  &:not(.overlay-nav) {
+    visibility: visible;
+  }
 
   .nav-header {
     display: flex;

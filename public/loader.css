@@ -3,24 +3,24 @@ body {
 }
 
 html {
+  overflow: hidden auto;
   background: var(--initial-loader-bg, #fff);
   min-block-size: calc(100% + env(safe-area-inset-top));
-  overflow-x: hidden;
-  overflow-y: auto;
 }
 
 #loading-bg {
   position: absolute;
+  z-index: 999;
   display: block;
   background: var(--initial-loader-bg, #fff);
-  block-size: 100%;
-  inline-size: 100%;
+  block-size: 100vh;
+  inline-size: 100vw;
 }
 
 .loading-logo {
   position: absolute;
-  inset-block-start: 40%;
-  inset-inline-start: calc(50% - 50px);
+  inset-block-start: 35%;
+  inset-inline-start: calc(50% - 5rem);
 }
 
 .loading {

@@ -11,6 +11,7 @@ node_modules
 .DS_Store
 dist
 dist-ssr
+dev-dist
 *.local
 
 /cypress/videos/
@@ -32,3 +33,4 @@ dist-ssr
 
 # iconify dist files
 src/@iconify/*.js
+public/plugin_icon/**

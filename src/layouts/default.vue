@@ -1,14 +1,16 @@
 <script lang="ts" setup>
 import DefaultLayoutWithVerticalNav from './components/DefaultLayoutWithVerticalNav.vue'
+
+const route = useRoute()
 </script>
 
 <template>
   <DefaultLayoutWithVerticalNav>
     <router-view v-slot="{ Component }">
       <keep-alive>
-        <component :is="Component" v-if="$route.meta.keepAlive" :key="$route.name" />
+        <component :is="Component" v-if="route.meta.keepAlive" :key="route.fullPath" />
       </keep-alive>
-      <component :is="Component" v-if="!$route.meta.keepAlive" :key="$route.name" />
+      <component :is="Component" v-if="!route.meta.keepAlive" :key="route.fullPath" />
     </router-view>
   </DefaultLayoutWithVerticalNav>
 </template>

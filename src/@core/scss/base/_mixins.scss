@@ -8,7 +8,6 @@
 // ℹ️ This mixin is inspired from vuetify for adding hover styles via before pseudo element
 @mixin before-pseudo() {
   position: relative;
-
   &::before {
     position: absolute;
     border-radius: inherit;

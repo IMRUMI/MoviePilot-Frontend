@@ -1,13 +1,23 @@
 <script lang="ts" setup>
-import type { CalendarOptions } from '@fullcalendar/core'
+import type { CalendarOptions, EventSourceInput } from '@fullcalendar/core'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import FullCalendar from '@fullcalendar/vue3'
 import type { Ref } from 'vue'
-import type { MediaInfo, Rss, Subscribe, TmdbEpisode } from '@/api/types'
+import type { MediaInfo, Subscribe, TmdbEpisode } from '@/api/types'
 import api from '@/api'
-import { parseDate } from '@/@core/utils/formatters'
+import { formatEp, parseDate } from '@/@core/utils/formatters'
+import ProgressDialog from '@/components/dialog/ProgressDialog.vue'
+
+// 进度框
+const progressDialog = ref(false)
+
+// 加载中
+const loading = ref(false)
+
+// 已加载过
+const isLoaded = ref(false)
 
 // 日历属性
 const calendarOptions: Ref<CalendarOptions> = ref({
@@ -20,6 +30,7 @@ const calendarOptions: Ref<CalendarOptions> = ref({
   ],
   initialView: 'dayGridMonth',
   weekends: true,
+  firstDay: 1,
   headerToolbar: {
     left: 'prev',
     center: 'title',
@@ -33,11 +44,11 @@ const calendarOptions: Ref<CalendarOptions> = ref({
   events: [],
 })
 
-async function eventsHander(subscribe: any) {
+async function eventsHander(subscribe: Subscribe) {
   // 如果是电影直接返回
   if (subscribe.type === '电影') {
     // 调用API查询TMDB详情
-    const movie: MediaInfo = await api.get(`media/${subscribe.tmdbid}`, {
+    const movie: MediaInfo = await api.get(`media/tmdb:${subscribe.tmdbid}`, {
       params: { type_name: subscribe.type },
     })
 
@@ -48,57 +59,77 @@ async function eventsHander(subscribe: any) {
       allDay: false,
       posterPath: subscribe.poster,
       mediaType: subscribe.type,
+      len: 1,
     }
-  }
-  else {
+  } else {
     // 调用API查询集信息
-    const episodes: TmdbEpisode[] = await api.get(
-            `tmdb/${subscribe.tmdbid}/${subscribe.season}`,
-    )
+    const episodes: TmdbEpisode[] = await api.get(`tmdb/${subscribe.tmdbid}/${subscribe.season}`)
 
-    return episodes.map((episode) => {
-      return {
-        title: subscribe.name,
-        subtitle: `第 ${episode.episode_number} 集`,
-        start: parseDate(episode.air_date || ''),
-        allDay: false,
-        posterPath: subscribe.poster,
-        mediaType: subscribe.type,
+    interface EpisodeInfo {
+      title: string
+      subtitle: string
+      start: Date | null
+      allDay: boolean
+      posterPath: string | undefined
+      mediaType: string
+      len: number
+    }
+
+    interface EpisodesDictionary {
+      [key: string]: EpisodeInfo
+    }
+
+    const dictEpisode: EpisodesDictionary = {}
+    episodes.forEach((episode: TmdbEpisode) => {
+      const air_date = episode.air_date ?? ''
+      if (dictEpisode[air_date]) {
+        dictEpisode[air_date].subtitle += `,${episode.episode_number}`
+        dictEpisode[air_date].len++
+      } else {
+        dictEpisode[air_date] = {
+          title: subscribe.name,
+          subtitle: `${episode.episode_number}`,
+          start: parseDate(episode.air_date || ''),
+          allDay: false,
+          posterPath: subscribe.poster,
+          mediaType: subscribe.type,
+          len: 1,
+        }
       }
     })
+    for (const key in dictEpisode)
+      dictEpisode[key].subtitle = formatEp(dictEpisode[key].subtitle.split(',').map(Number))
+
+    return Object.values(dictEpisode)
   }
 }
 
 // 调用API查询所有订阅
 async function getSubscribes() {
+  if (!isLoaded.value) progressDialog.value = true
   try {
     // 订阅
-    const subscribes: Subscribe[] = await api.get('subscribe')
-
-    const subEvents = await Promise.all(
-      subscribes.map(async sub => eventsHander(sub)),
-    )
-
-    // 自定义订阅
-    const rsses: Rss[] = await api.get('rss')
-
-    const rssEvents = await Promise.all(
-      rsses.map(async rss => eventsHander(rss)),
-    )
-
-    // 合并事件
-    const events = [...subEvents, ...rssEvents]
-
-    calendarOptions.value.events = events.flat()
-  }
-  catch (error) {
+    loading.value = true
+    const subscribes: Subscribe[] = await api.get('subscribe/')
+    loading.value = false
+    const subEvents = await Promise.all(subscribes.map(async sub => eventsHander(sub)))
+    calendarOptions.value.events = subEvents.flat().filter(event => event.start) as EventSourceInput
+    isLoaded.value = true
+  } catch (error) {
     console.error(error)
   }
+  progressDialog.value = false
 }
 
 // 页面加载时调用API查询所有订阅
 onMounted(() => {
   getSubscribes()
+})
+
+onActivated(() => {
+  if (!loading.value) {
+    getSubscribes()
+  }
 })
 </script>
 
@@ -125,18 +156,18 @@ onMounted(() => {
               </VImg>
             </div>
             <div>
-              <VCardSubtitle class="pa-2 font-bold break-words whitespace-break-spaces">
+              <VCardSubtitle class="pa-1 px-2 font-bold break-words whitespace-break-spaces">
                 {{ arg.event.title }}
               </VCardSubtitle>
-              <VCardText class="pa-0 px-2">
-                {{ arg.event.extendedProps.subtitle }}
+              <VCardText v-if="arg.event.extendedProps.subtitle" class="pa-0 px-2 break-words">
+                第{{ arg.event.extendedProps.subtitle }}集
               </VCardText>
             </div>
           </div>
         </VCard>
       </div>
       <div class="md:hidden">
-        <VTooltip :text="`${arg.event.title} ${arg.event.extendedProps.subtitle}`">
+        <VTooltip :text="`${arg.event.title} 第 ${arg.event.extendedProps.subtitle} 集`">
           <template #activator="{ props }">
             <VImg
               height="60"
@@ -152,12 +183,22 @@ onMounted(() => {
                   <VSkeletonLoader class="object-cover aspect-w-2 aspect-h-3" />
                 </div>
               </template>
+              <VChip
+                v-if="arg.event.extendedProps.len > 1"
+                variant="elevated"
+                color="primary"
+                size="x-small"
+                class="absolute right-0 top-0"
+              >
+                {{ arg.event.extendedProps.len }}
+              </VChip>
             </VImg>
           </template>
         </VTooltip>
       </div>
     </template>
   </FullCalendar>
+  <ProgressDialog v-if="progressDialog" v-model="progressDialog" text="正在加载 ..." />
 </template>
 
 <style lang="scss">
@@ -168,6 +209,11 @@ onMounted(() => {
   --fc-list-event-hover-bg-color: rgba(var(--v-theme-on-surface), 0.02);
   --fc-page-bg-color: rgb(var(--v-theme-surface));
   --fc-event-border-color: currentcolor;
+}
+
+// 当天背景渐变
+.fc-day-today {
+  background-image: linear-gradient(to bottom, #af85fd, rgba(var(--v-theme-on-surface), 0.04));
 }
 
 .v-application .fc a {
@@ -262,11 +308,7 @@ onMounted(() => {
 
 .v-application .fc .fc-toolbar-chunk .fc-button-group .fc-button-primary,
 .v-application .fc .fc-toolbar-chunk .fc-button-group .fc-button-primary:hover,
-.v-application
-  .fc
-  .fc-toolbar-chunk
-  .fc-button-group
-  .fc-button-primary:not(.disabled):active {
+.v-application .fc .fc-toolbar-chunk .fc-button-group .fc-button-primary:not(.disabled):active {
   border-color: transparent;
   background-color: transparent;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
@@ -290,20 +332,11 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
-.v-application
-  .fc
-  .fc-toolbar-chunk:last-child
-  .fc-button-group
-  .fc-button:not(:last-child) {
-  border-inline-end: 0.0625rem solid
-    rgba(var(--v-theme-primary), var(--v-overlay-scrim-opacity));
+.v-application .fc .fc-toolbar-chunk:last-child .fc-button-group .fc-button:not(:last-child) {
+  border-inline-end: 0.0625rem solid rgba(var(--v-theme-primary), var(--v-overlay-scrim-opacity));
 }
 
-.v-application
-  .fc
-  .fc-toolbar-chunk:last-child
-  .fc-button-group
-  .fc-button.fc-button-active {
+.v-application .fc .fc-toolbar-chunk:last-child .fc-button-group .fc-button.fc-button-active {
   background-color: rgba(var(--v-theme-primary), var(--v-activated-opacity));
   color: rgb(var(--v-theme-primary));
 }
@@ -339,7 +372,7 @@ onMounted(() => {
   padding-inline: 0.25rem;
 }
 
-.v-application .fc tbody[role="rowgroup"] > tr > td[role="presentation"] {
+.v-application .fc tbody[role='rowgroup'] > tr > td[role='presentation'] {
   border: none;
 }
 
@@ -352,8 +385,8 @@ onMounted(() => {
 }
 
 .v-application .fc .fc-daygrid-day-number {
-  padding-block: 0rem;
-  padding-inline: 0rem;
+  padding-block: 0;
+  padding-inline: 0;
 }
 
 .v-application .fc .fc-list-event-dot {
@@ -368,8 +401,7 @@ onMounted(() => {
 
 .v-application .fc .fc-popover {
   border-radius: 6px;
-  box-shadow: 0 4px 14px -4px var(--v-shadow-key-umbra-opacity),
-    0 4px 8px -4px var(--v-shadow-key-penumbra-opacity),
+  box-shadow: 0 4px 14px -4px var(--v-shadow-key-umbra-opacity), 0 4px 8px -4px var(--v-shadow-key-penumbra-opacity),
     0 4px 8px -4px var(--v-shadow-key-ambient-opacity);
 }
 
@@ -403,18 +435,13 @@ onMounted(() => {
   margin-inline-end: 0.25rem;
 }
 
-@media (max-width: 1264px) {
+@media (width <= 1264px) {
   .v-application .fc .fc-toolbar-chunk .fc-button-group .fc-drawerToggler-button {
     display: block !important;
   }
 }
 
-.v-theme--dark
-  .v-application
-  .fc
-  .fc-toolbar-chunk
-  .fc-button-group
-  .fc-drawerToggler-button {
+.v-theme--dark .v-application .fc .fc-toolbar-chunk .fc-button-group .fc-drawerToggler-button {
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' stroke='rgba(232,232,241,0.68)' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round' class='css-i6dzq1'%3E%3Cpath d='M3 12h18M3 6h18M3 18h18'/%3E%3C/svg%3E");
 }
 
@@ -449,10 +476,10 @@ onMounted(() => {
 }
 
 .v-application .fc .fc-button-primary {
-  background-color: transparent;
   border: none;
-  outline: none;
+  background-color: transparent;
   color: var(--v-theme-on-surface);
+  outline: none;
 }
 
 .v-application .fc .fc-button-primary:hover {
@@ -460,7 +487,7 @@ onMounted(() => {
   color: rgb(var(--v-theme-primary));
 }
 
-@media (max-width: 776px) {
+@media (width <= 776px) {
   .fc-daygrid-event-harness {
     display: flex;
     align-items: center;

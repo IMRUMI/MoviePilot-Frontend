@@ -17,11 +17,16 @@ function getPercentage() {
 
 // 速度
 function getSpeedText() {
-  return `↑ ${props.info?.upspeed}/s ↓ ${props.info?.dlspeed}/s`
+  return `↑ ${props.info?.upspeed}/s ↓ ${props.info?.dlspeed}/s ${props.info?.left_time}`
 }
 
 // 下载状态
 const isDownloading = ref(props.info?.state === 'downloading')
+
+// 监听props.info?.state的变化
+watch(() => props.info?.state, (newValue) => {
+  isDownloading.value = newValue === 'downloading'
+})
 
 // 图片是否加载完成
 const imageLoaded = ref(false)
@@ -40,8 +45,8 @@ function getTextClass() {
 async function toggleDownload() {
   const operation = isDownloading.value ? 'stop' : 'start'
   try {
-    const result: { [key: string]: any } = await api.put(
-      `download/${props.info?.hash}/${operation}`,
+    const result: { [key: string]: any } = await api.get(
+      `download/${operation}/${props.info?.hash}`,
     )
 
     if (result.success)
@@ -84,7 +89,7 @@ async function deleteDownload() {
       :class="getTextClass()"
     >
       {{ props.info?.media.title || props.info?.name }}
-      {{ props.info?.season_episode }}
+      {{ props.info?.media.episode ? `${props.info?.media.season} ${props.info?.media.episode}` : props.info?.season_episode }}
     </VCardTitle>
 
     <VCardSubtitle
@@ -109,9 +114,10 @@ async function deleteDownload() {
     </VCardText>
 
     <VCardActions class="justify-space-between">
-      <VBtn @click="toggleDownload">
-        <span class="ms-2">{{ isDownloading ? "暂停" : "开始" }}</span>
-      </VBtn>
+      <VBtn
+        :icon="`${isDownloading ? 'mdi-pause' : 'mdi-play'}`"
+        @click="toggleDownload"
+      />
       <VBtn
         color="error"
         icon="mdi-trash-can-outline"

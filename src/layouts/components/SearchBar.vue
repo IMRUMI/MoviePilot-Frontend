@@ -1,90 +1,52 @@
 <script lang="ts" setup>
-// 路由
-const router = useRouter()
+import * as Mousetrap from 'mousetrap'
+import SearchBarView from '@/views/system/SearchBarView.vue'
+import { useDisplay } from 'vuetify'
+import { ref, computed } from 'vue'
 
-// 搜索词
-const searchWord = ref<string>('')
+const display = useDisplay()
 
-// 搜索弹窗
 const searchDialog = ref(false)
 
-// Search
-function search() {
-  if (!searchWord.value)
-    return
+// 注册快捷键
+Mousetrap.bind(['command+k', 'ctrl+k'], openSearchDialog)
 
-  searchDialog.value = false
-  router.push({
-    path: '/browse/media/search',
-    query: {
-      title: searchWord.value,
-    },
-  })
+// 打开搜索弹窗
+function openSearchDialog() {
+  searchDialog.value = true
+  return false
 }
+
+// 检测操作系统是否是Mac
+function isMac() {
+  return navigator.platform.toUpperCase().indexOf('MAC') >= 0
+}
+
+// 计算属性：根据操作系统显示不同的按键提示
+const metaKey = computed(() => (isMac() ? '⌘+K' : 'Ctrl+K'))
 </script>
 
 <template>
-  <!-- 👉 Search Button -->
-  <div
-    class="d-flex align-center cursor-pointer"
-    style="user-select: none;"
-  >
-    <VDialog
-      v-model="searchDialog"
-      max-width="600"
-      transition="dialog-top-transition"
-    >
-      <!-- Dialog Activator -->
-      <template #activator="{ props }">
-        <IconBtn
-          class="d-lg-none"
-          v-bind="props"
-        >
-          <VIcon icon="mdi-magnify" />
-        </IconBtn>
-      </template>
-      <!-- Dialog Content -->
-      <VCard title="搜索">
-        <VCardText>
-          <VRow>
-            <VCol cols="12">
-              <VTextField
-                v-model="searchWord"
-                label="电影、电视剧名称"
-              />
-            </VCol>
-          </VRow>
-        </VCardText>
-
-        <VCardActions>
-          <VSpacer />
-          <VBtn
-            @click="search"
-            @keydown.enter="search"
-          >
-            搜索
-          </VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+  <!-- 👉 Search Icon -->
+  <div class="d-flex align-center cursor-pointer ms-lg-n2" style="user-select: none">
+    <IconBtn @click="openSearchDialog">
+      <VIcon icon="ri-search-line" />
+    </IconBtn>
+    <span v-if="display.lgAndUp.value" class="flex align-center text-disabled ms-2" @click="openSearchDialog">
+      <span class="me-3">搜索</span>
+      <span class="meta-key">{{ metaKey }}</span>
+    </span>
   </div>
-
-  <!-- 👉 Search Textfield -->
-  <span class="w-1/5">
-    <VTextField
-      key="search_navbar"
-      v-model="searchWord"
-      class="d-none d-lg-block text-disabled"
-      density="compact"
-      variant="solo"
-      label="搜索电影、电视剧"
-      append-inner-icon="mdi-magnify"
-      single-line
-      hide-details
-      flat
-      rounded
-      @click:append-inner="search"
-      @keydown.enter="search"
-    />
-  </span>
+  <!-- 搜索弹窗 -->
+  <SearchBarView v-model="searchDialog" v-if="searchDialog" @close="searchDialog = false" />
 </template>
+
+<style type="scss" scoped>
+.meta-key {
+  border: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 6px;
+  block-size: 1.75rem;
+  padding-block: 0.1rem;
+  padding-inline: 0.25rem;
+}
+</style>
